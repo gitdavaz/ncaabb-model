@@ -4,6 +4,7 @@ Best bets selection logic
 
 from typing import List, Dict, Tuple
 import numpy as np
+import config
 
 
 def american_odds_to_probability(odds: int) -> float:
@@ -119,8 +120,13 @@ class BestBetsSelector:
         Returns:
             List of top 5 best bets, sorted by score
         """
-        # Filter by odds criteria
-        eligible_bets = [bet for bet in all_bets if self.meets_odds_criteria(bet['odds'])]
+        # Filter by odds criteria AND minimum confidence
+        min_confidence = config.MIN_CONFIDENCE_FOR_BEST_BETS
+        eligible_bets = [
+            bet for bet in all_bets 
+            if self.meets_odds_criteria(bet['odds']) 
+            and bet['confidence'] >= min_confidence
+        ]
         
         # Calculate scores for each bet
         for bet in eligible_bets:
@@ -167,34 +173,32 @@ class BestBetsSelector:
             away_odds = market_spread.get('away_odds', -110)
             
             # Determine which side to bet based on prediction vs market
-            edge = 0  # Track the edge for confidence adjustment
+            # Edge calculation: positive edge means model is more bullish on home than market
+            # home_spread is negative when home is favored (e.g., -10 means home gives 10 points)
+            # prediction = home_score - away_score (positive means home wins)
+            # 
+            # To compare apples-to-apples, convert both to expected home margins:
+            # - Model's expected home margin: prediction
+            # - Market's expected home margin: -home_spread (negative of the spread)
+            # - edge = prediction - (-home_spread) = prediction + home_spread
+            edge_direction = prediction + home_spread
             
-            if prediction > 0:  # Home team favored in prediction
-                if prediction > abs(home_spread):  # Prediction more favorable than market
-                    pick_team = home_team
-                    pick_spread = home_spread
-                    pick_odds = home_odds
-                    edge = prediction - home_spread
-                    win_prob = self._spread_to_probability(edge)
-                else:
-                    pick_team = away_team
-                    pick_spread = away_spread
-                    pick_odds = away_odds
-                    edge = away_spread - prediction
-                    win_prob = self._spread_to_probability(edge)
-            else:  # Away team favored in prediction
-                if abs(prediction) > abs(away_spread):
-                    pick_team = away_team
-                    pick_spread = away_spread
-                    pick_odds = away_odds
-                    edge = abs(prediction) - abs(away_spread)
-                    win_prob = self._spread_to_probability(edge)
-                else:
-                    pick_team = home_team
-                    pick_spread = home_spread
-                    pick_odds = home_odds
-                    edge = home_spread + abs(prediction)
-                    win_prob = self._spread_to_probability(edge)
+            if edge_direction > 0:
+                # Model is more bullish on home team than market
+                # Bet home side (model thinks home will do better than market expects)
+                pick_team = home_team
+                pick_spread = home_spread
+                pick_odds = home_odds
+                edge = abs(edge_direction)
+                win_prob = self._spread_to_probability(edge)
+            else:
+                # Model is more bullish on away team than market
+                # Bet away side (model thinks away will do better than market expects)
+                pick_team = away_team
+                pick_spread = away_spread
+                pick_odds = away_odds
+                edge = abs(edge_direction)
+                win_prob = self._spread_to_probability(edge)
             
             # Adjust confidence based on edge size
             # Very large edges reduce confidence (extreme predictions are less reliable)

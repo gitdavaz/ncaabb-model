@@ -423,21 +423,27 @@ Examples:
             home_odds = market_spread.get('home_odds', -110)
             away_odds = market_spread.get('away_odds', -110)
             
-            # Use the SAME logic as create_bet_from_prediction to determine which side to bet
-            if predicted_spread > 0:  # Home team favored in prediction
-                if predicted_spread > abs(home_spread):  # Prediction more favorable than market
-                    spread_pick = f"{home_team} {home_spread:+.1f}"
-                    spread_odds = home_odds
-                else:
-                    spread_pick = f"{away_team} {away_spread:+.1f}"
-                    spread_odds = away_odds
-            else:  # Away team favored in prediction
-                if abs(predicted_spread) > abs(away_spread):
-                    spread_pick = f"{away_team} {away_spread:+.1f}"
-                    spread_odds = away_odds
-                else:
-                    spread_pick = f"{home_team} {home_spread:+.1f}"
-                    spread_odds = home_odds
+            # Determine which side to bet based on model vs market
+            # Edge calculation: positive edge means model is more bullish on home than market
+            # home_spread is negative when home is favored (e.g., -10 means home gives 10 points)
+            # predicted_spread = home_score - away_score (positive means home wins)
+            # 
+            # To compare apples-to-apples, convert both to expected home margins:
+            # - Model's expected home margin: predicted_spread
+            # - Market's expected home margin: -home_spread (negative of the spread)
+            # - edge = predicted_spread - (-home_spread) = predicted_spread + home_spread
+            edge = predicted_spread + home_spread
+            
+            if edge > 0:
+                # Model is more bullish on home team than market
+                # Bet home side (model thinks home will do better than market expects)
+                spread_pick = f"{home_team} {home_spread:+.1f}"
+                spread_odds = home_odds
+            else:
+                # Model is more bullish on away team than market
+                # Bet away side (model thinks away will do better than market expects)
+                spread_pick = f"{away_team} {away_spread:+.1f}"
+                spread_odds = away_odds
             
             # Determine total pick
             market_total = odds_data.get('total', {})

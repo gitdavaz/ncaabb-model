@@ -69,8 +69,12 @@ for game in games:
     actual_total = home_score + away_score
     
     # SPREAD BET ANALYSIS
-    # Model bets on team expected to cover better than market
-    if predicted_spread > abs(market_spread_home):
+    # Determine which side model would bet based on model vs market
+    # edge = predicted_spread + market_spread_home
+    # Positive edge = model more bullish on home, negative = model more bullish on away
+    edge = predicted_spread + market_spread_home
+    
+    if edge > 0:
         # Model likes home team more than market
         bet_result = actual_spread > market_spread_home  # Did home cover?
         bet_pick = f"{home_team} {market_spread_home:+.1f}"

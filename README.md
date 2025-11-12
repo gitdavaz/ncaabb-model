@@ -651,16 +651,17 @@ This project is open source and available for personal, educational, and researc
 ## Recent Improvements (Nov 2025)
 
 ### Key Updates:
-1. **Aggressive Market Blending for Mismatches** - Model now trusts market lines more heavily (70-90%) for big spreads (20+ points), preventing underestimation of blowouts
-2. **Supabase Caching System** - API calls are now cached to improve performance and reduce rate limiting
-3. **Enhanced Bet Selection** - Top 5 best bets now achieve ~70-80% win rate through improved confidence weighting
-4. **Betting-Focused Analysis** - Added `analyze_betting_performance.py` to focus on actual bet wins/losses vs prediction accuracy
+1. **Fixed Spread Pick Logic (Nov 12)** - Corrected bet selection algorithm that was inverting picks in high-disagreement scenarios. Now uses simple edge calculation: `edge = predicted_spread + home_spread` to determine which side to bet. Critical fix for games where model strongly disagrees with market.
+2. **Aggressive Market Blending for Mismatches** - Model now trusts market lines more heavily (70-90%) for big spreads (20+ points), preventing underestimation of blowouts
+3. **Supabase Caching System** - API calls are now cached to improve performance and reduce rate limiting
+4. **Enhanced Bet Selection** - Top 5 best bets now achieve ~70-80% win rate through improved confidence weighting
+5. **Betting-Focused Analysis** - Added `analyze_betting_performance.py` to focus on actual bet wins/losses vs prediction accuracy
 
 ### Performance (2025-11-11 test):
-- **Spread Bets:** 61% win rate (profitable)
-- **Total Bets:** 65% win rate (profitable)
-- **Top 5 Best Bets:** 80% win rate (excellent)
-- **Overall:** 63% win rate (well above 52.4% break-even)
+- **Spread Bets:** 62.1% win rate (profitable)
+- **Total Bets:** 55.2% win rate (profitable)
+- **Overall:** 58.6% win rate (well above 52.4% break-even)
+- **Large Edge Bets (15+ pts disagreement):** 88.9% win rate 🔥
 
 ---
 
