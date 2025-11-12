@@ -1,22 +1,29 @@
+# Environment
 .env
+.env.local
+venv/
+env/
+ENV/
+
+# Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
+*.py[cod]
+*$py.class
 *.so
-*.egg
-*.egg-info/
-dist/
-build/
-*.log
-.DS_Store
+.Python
+
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-data/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+*.log
 cache/
-
-
+temp/
