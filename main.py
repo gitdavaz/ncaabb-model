@@ -170,6 +170,7 @@ def print_best_bets(best_bets: List[Dict]):
     for i, bet in enumerate(best_bets, 1):
         table_data.append([
             f"#{i}",
+            bet.get('start_time', 'TBD'),
             bet['game_description'],
             bet['bet_type'],
             bet['pick'],
@@ -180,7 +181,7 @@ def print_best_bets(best_bets: List[Dict]):
         ])
     
     print(tabulate(table_data,
-                  headers=['Rank', 'Game', 'Type', 'Pick', 'Odds', 'Value', 'Confidence', 'Score'],
+                  headers=['Rank', 'Time (EST)', 'Game', 'Type', 'Pick', 'Odds', 'Value', 'Confidence', 'Score'],
                   tablefmt='grid'))
     
     # Print detailed reasoning for each bet
@@ -198,7 +199,7 @@ def print_best_bets(best_bets: List[Dict]):
         home_proj = bet.get('home_projected', 0)
         away_proj = bet.get('away_projected', 0)
         
-        print(f"#{i} - {bet['game_description']}")
+        print(f"#{i} - {bet['game_description']} ({bet.get('start_time', 'TBD')} EST)")
         print(f"    Projected Score: {home_team} {home_proj:.1f}, {away_team} {away_proj:.1f}")
         print(f"    Pick: {bet['pick']} ({format_odds(bet['odds'])})")
         print(f"    Reasoning: {bet['reasoning']}")
@@ -505,9 +506,10 @@ Examples:
                 except:
                     pass
             
-            # Only add to best bets if game hasn't started
-            if not game_has_started:
-                games_not_started.append(game)
+            # Add to best bets if game hasn't started OR if --all-games flag is set
+            if not game_has_started or args.all_games:
+                if not game_has_started:
+                    games_not_started.append(game)
                 
                 # Create bets for best bets selection
                 spread_bets = selector.create_bet_from_prediction(
@@ -517,10 +519,11 @@ Examples:
                     game, 'total', predicted_total, total_confidence, odds_data
                 )
                 
-                # Add projected scores to bet dictionaries
+                # Add projected scores and start time to bet dictionaries
                 for bet in spread_bets + total_bets:
                     bet['home_projected'] = home_projected
                     bet['away_projected'] = away_projected
+                    bet['start_time'] = time_str
                 
                 all_bets.extend(spread_bets)
                 all_bets.extend(total_bets)
@@ -534,10 +537,18 @@ Examples:
     
     # Select and print best bets
     games_started = len(games) - len(games_not_started)
-    if games_started > 0:
-        print(f"\n⏰ Note: {games_started} game(s) have already started and excluded from best bets")
     
-    print(f"\nSelecting top 5 best bets from {len(games_not_started)} games that haven't started (odds -125 or better)...")
+    if args.all_games:
+        # When using --all-games, include all games for best bets
+        print(f"\nSelecting top 5 best bets from {len(games)} game(s) (odds -125 or better)...")
+        if games_started > 0:
+            print(f"   ℹ️  Note: {games_started} game(s) have already completed")
+    else:
+        # Normal mode: only upcoming games
+        if games_started > 0:
+            print(f"\n⏰ Note: {games_started} game(s) have already started and excluded from best bets")
+        print(f"\nSelecting top 5 best bets from {len(games_not_started)} games that haven't started (odds -125 or better)...")
+    
     best_bets = selector.select_best_bets(all_bets)
     print_best_bets(best_bets)
     

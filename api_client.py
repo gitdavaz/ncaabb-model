@@ -86,7 +86,7 @@ class CollegeBasketballAPI:
         Get all games for today (or specified date)
         
         Args:
-            date: Date in YYYY-MM-DD format (local time). If None, uses today
+            date: Date in YYYY-MM-DD format (EST timezone). If None, uses today in EST
             d1_only: If True, only return games between D1 conference teams (excludes exhibitions)
             upcoming_only: If True, only return games that haven't been played yet (excludes FINAL games)
             
@@ -94,33 +94,31 @@ class CollegeBasketballAPI:
             List of game dictionaries
         """
         if date is None:
-            date = datetime.now().strftime('%Y-%m-%d')
+            # Get current date in EST (UTC-5)
+            from datetime import timezone, timedelta
+            now_utc = datetime.now(timezone.utc)
+            now_est = now_utc - timedelta(hours=5)
+            date = now_est.strftime('%Y-%m-%d')
         
         try:
             season = self._get_current_season()
             
-            # Parse date in local timezone
-            # Create range for the full day in local time
+            # Parse date in EST timezone (all game times are displayed in EST)
+            # Create range for the full day in EST
+            from datetime import timezone, timedelta
             local_date = datetime.strptime(date, '%Y-%m-%d')
             
-            # Start of day local time (00:00:00)
-            start_local = local_date.replace(hour=0, minute=0, second=0, microsecond=0)
-            # End of day local time (23:59:59)
-            end_local = local_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+            # Start of day EST (00:00:00 EST)
+            start_est = local_date.replace(hour=0, minute=0, second=0, microsecond=0)
+            # End of day EST (23:59:59 EST)
+            end_est = local_date.replace(hour=23, minute=59, second=59, microsecond=999999)
             
-            # Convert to UTC for API query (API uses UTC timestamps)
-            # Get local timezone
-            from datetime import timezone
-            import time
-            
-            # Get UTC offset
-            utc_offset_seconds = time.timezone if time.daylight == 0 else time.altzone
-            utc_offset_hours = -utc_offset_seconds / 3600
-            
-            # Convert to UTC by subtracting the offset
-            from datetime import timedelta
-            start_utc = start_local + timedelta(hours=-utc_offset_hours)
-            end_utc = end_local + timedelta(hours=-utc_offset_hours)
+            # Convert EST to UTC for API query (API uses UTC timestamps)
+            # EST is UTC-5 (or EDT is UTC-4, but we'll use EST year-round for simplicity)
+            # To convert EST to UTC, add 5 hours
+            est_offset = timedelta(hours=5)
+            start_utc = start_est + est_offset
+            end_utc = end_est + est_offset
             
             # Try cache first (for same-day queries)
             if self.cache and not upcoming_only:  # Only cache completed games

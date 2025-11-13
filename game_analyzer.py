@@ -53,10 +53,13 @@ def get_date_input() -> str:
     print("=" * 60)
     
     while True:
-        date_input = input("\nEnter date (YYYY-MM-DD) or press Enter for today: ").strip()
+        date_input = input("\nEnter date (YYYY-MM-DD) or press Enter for today (EST): ").strip()
         
         if not date_input:
-            return datetime.now().strftime('%Y-%m-%d')
+            # Get current date in EST (UTC-5)
+            now_utc = datetime.now(timezone.utc)
+            now_est = now_utc - timedelta(hours=5)
+            return now_est.strftime('%Y-%m-%d')
         
         try:
             datetime.strptime(date_input, '%Y-%m-%d')
@@ -443,9 +446,19 @@ def main():
         # Get date
         target_date = get_date_input()
         
+        # Ask if user wants upcoming only or all games
+        print("\n" + "=" * 60)
+        print("Game Filter")
+        print("=" * 60)
+        print("\n1. Upcoming games only (not yet played)")
+        print("2. All games (upcoming + completed)")
+        
+        filter_choice = input("\nSelect filter (1 or 2, default: 1): ").strip()
+        upcoming_only = filter_choice != '2'
+        
         # Get games for that date
-        print(f"\n⏳ Fetching games for {target_date}...")
-        games = api_client.get_todays_games(date=target_date, d1_only=True, upcoming_only=False)
+        print(f"\n⏳ Fetching {'upcoming ' if upcoming_only else ''}games for {target_date}...")
+        games = api_client.get_todays_games(date=target_date, d1_only=True, upcoming_only=upcoming_only)
         
         if not games:
             print(f"\n❌ No games found for {target_date}")
