@@ -24,10 +24,12 @@ WEIGHTS = {
 }
 
 # Confidence Thresholds
-MIN_CONFIDENCE_FOR_BEST_BETS = 0.35  # Minimum confidence (0-1) to consider for best bets
-# Note: Early season (Nov-Dec) typically 35-45% confidence due to limited data
-#       Mid-season (Jan-Feb) typically 40-55% confidence with more data
-#       35% filters out the bottom ~10% of predictions while keeping quality bets
+MIN_CONFIDENCE_FOR_BEST_BETS = 0.42  # Minimum confidence (0-1) to consider for best bets
+# Note: Raised from 35% to 42% after 0-7 performance on low-confidence bets (Nov 13-14)
+#       Analysis showed bets below 40% confidence were losing at high rates
+#       42% balances quality (filtering marginal bets) with quantity (2-4 bets/day)
+#       Early season: 42-55% confidence range
+#       Mid-season: Will naturally increase to 45-60% as data improves
 
 # Display Settings
 SHOW_DETAILED_ANALYSIS = True    # Show detailed reasoning for best bets
