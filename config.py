@@ -24,12 +24,13 @@ WEIGHTS = {
 }
 
 # Confidence Thresholds
-MIN_CONFIDENCE_FOR_BEST_BETS = 0.42  # Minimum confidence (0-1) to consider for best bets
-# Note: Raised from 35% to 42% after 0-7 performance on low-confidence bets (Nov 13-14)
-#       Analysis showed bets below 40% confidence were losing at high rates
-#       42% balances quality (filtering marginal bets) with quantity (2-4 bets/day)
-#       Early season: 42-55% confidence range
-#       Mid-season: Will naturally increase to 45-60% as data improves
+MIN_CONFIDENCE_FOR_BEST_BETS = 0.30  # Minimum confidence (0-1) to consider for best bets
+# Note: Low threshold because confidence measures DATA QUALITY, not PREDICTION QUALITY
+#       Analysis (Nov 12-14) showed: 30-35% conf = 88% win rate, 40-50% conf = 50% win rate
+#       This is because early season (low conf) = MORE market inefficiency = BIGGER EDGES
+#       The best_bets scoring algorithm (60% value, 40% confidence) naturally balances
+#       edge opportunity vs data reliability. Let it work!
+#       We filter by VALUE RATING (predicted win prob) not just confidence
 
 # Display Settings
 SHOW_DETAILED_ANALYSIS = True    # Show detailed reasoning for best bets
