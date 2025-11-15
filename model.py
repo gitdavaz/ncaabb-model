@@ -632,6 +632,28 @@ class BasketballPredictionModel:
         # Total = sum of both projected scores
         predicted_total = home_projected + away_projected
         
+        # Apply early-season adjustment for totals
+        # Early season games tend to score less due to: rust, new lineups, learning systems
+        from datetime import datetime
+        if game_info and 'start_date' in game_info:
+            try:
+                start_date_str = game_info['start_date']
+                if isinstance(start_date_str, str):
+                    game_date = datetime.fromisoformat(start_date_str.split('T')[0].replace('Z', ''))
+                    month = game_date.month
+                    day = game_date.day
+                    
+                    # November: Apply 5% reduction (games score less early in season)
+                    if month == 11:
+                        predicted_total *= 0.95  # Reduce by 5%
+                    # Early December (first 2 weeks): Apply 3% reduction
+                    elif month == 12 and day <= 14:
+                        predicted_total *= 0.97  # Reduce by 3%
+                    # Mid-December through rest of season: No adjustment
+                    # (by then, teams have found their rhythm)
+            except:
+                pass  # If we can't parse the date, skip the adjustment
+        
         # Sanity bounds
         predicted_total = max(110, min(200, predicted_total))
         
