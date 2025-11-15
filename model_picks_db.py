@@ -137,7 +137,7 @@ class ModelPicksDB:
             Number of picks locked
         """
         # Call the database function
-        result = self.client.rpc('lock_started_games').execute()
+        result = self.client.rpc('lock_started_games', {}).execute()
         return result.data if result.data else 0
     
     def get_picks(self, date: str, best_bets_only: bool = False) -> List[Dict]:
