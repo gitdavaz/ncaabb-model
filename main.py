@@ -527,8 +527,9 @@ Examples:
                 for bet in spread_bets + total_bets:
                     bet['home_projected'] = home_projected
                     bet['away_projected'] = away_projected
-                    bet['start_time'] = time_str
-                    bet['start_time_sort'] = game_time_est  # datetime for database
+                    bet['start_time'] = time_str  # Formatted string for display (EST)
+                    bet['start_time_sort'] = game_time_est  # For sorting (EST)
+                    bet['start_time_utc'] = game.get('start_date')  # Original UTC for database
                 
                 all_bets.extend(spread_bets)
                 all_bets.extend(total_bets)
@@ -574,10 +575,21 @@ Examples:
             home_team = parts[1]
             
             # Create database record
-            # Convert game_start_time to ISO format if it's a datetime object
-            game_start = bet.get('start_time_sort')
-            if game_start and hasattr(game_start, 'isoformat'):
-                game_start = game_start.isoformat()
+            # Use the original UTC time from the API (not the EST-converted display time)
+            # This ensures the lock mechanism compares correctly with PostgreSQL's NOW()
+            game_start = bet.get('start_time_utc')  # Original UTC timestamp
+            if game_start:
+                # Parse if it's a string
+                if isinstance(game_start, str):
+                    # Remove timezone suffix if present and parse
+                    start_str = game_start.replace('+00:00', '').replace('Z', '')
+                    game_start_dt = datetime.fromisoformat(start_str.split('.')[0])
+                    # Make it timezone-aware (UTC)
+                    game_start_dt = game_start_dt.replace(tzinfo=timezone.utc)
+                    game_start = game_start_dt.isoformat()
+                elif hasattr(game_start, 'isoformat'):
+                    # Already a datetime, just convert to ISO
+                    game_start = game_start.isoformat()
             
             db_pick = {
                 'date': today,
