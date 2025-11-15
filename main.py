@@ -510,29 +510,30 @@ Examples:
                 except:
                     pass
             
-            # Add to best bets if game hasn't started OR if --all-games flag is set
-            if not game_has_started or args.all_games:
-                if not game_has_started:
-                    games_not_started.append(game)
-                
-                # Create bets for best bets selection
-                spread_bets = selector.create_bet_from_prediction(
-                    game, 'spread', predicted_spread, spread_confidence, odds_data
-                )
-                total_bets = selector.create_bet_from_prediction(
-                    game, 'total', predicted_total, total_confidence, odds_data
-                )
-                
-                # Add projected scores and start time to bet dictionaries
-                for bet in spread_bets + total_bets:
-                    bet['home_projected'] = home_projected
-                    bet['away_projected'] = away_projected
-                    bet['start_time'] = time_str  # Formatted string for display (EST)
-                    bet['start_time_sort'] = game_time_est  # For sorting (EST)
-                    bet['start_time_utc'] = game.get('start_date')  # Original UTC for database
-                
-                all_bets.extend(spread_bets)
-                all_bets.extend(total_bets)
+            # Track games that haven't started
+            if not game_has_started:
+                games_not_started.append(game)
+            
+            # ALWAYS create bets for ALL games (for database tracking)
+            spread_bets = selector.create_bet_from_prediction(
+                game, 'spread', predicted_spread, spread_confidence, odds_data
+            )
+            total_bets = selector.create_bet_from_prediction(
+                game, 'total', predicted_total, total_confidence, odds_data
+            )
+            
+            # Add projected scores and start time to bet dictionaries
+            for bet in spread_bets + total_bets:
+                bet['home_projected'] = home_projected
+                bet['away_projected'] = away_projected
+                bet['start_time'] = time_str  # Formatted string for display (EST)
+                bet['start_time_sort'] = game_time_est  # For sorting (EST)
+                bet['start_time_utc'] = game.get('start_date')  # Original UTC for database
+                bet['game_has_started'] = game_has_started  # Track status
+            
+            # Always add to all_bets for database saving
+            all_bets.extend(spread_bets)
+            all_bets.extend(total_bets)
             
         except Exception as e:
             print(f"  ⚠️  Error analyzing game: {e}")
@@ -544,18 +545,21 @@ Examples:
     # Select and print best bets
     games_started = len(games) - len(games_not_started)
     
+    # Filter bets for best bets selection based on --all-games flag
     if args.all_games:
         # When using --all-games, include all games for best bets
+        bets_for_selection = all_bets
         print(f"\nSelecting top 5 best bets from {len(games)} game(s) (odds -125 or better)...")
         if games_started > 0:
             print(f"   ℹ️  Note: {games_started} game(s) have already completed")
     else:
-        # Normal mode: only upcoming games
+        # Normal mode: only include bets for games that haven't started
+        bets_for_selection = [bet for bet in all_bets if not bet.get('game_has_started', False)]
         if games_started > 0:
             print(f"\n⏰ Note: {games_started} game(s) have already started and excluded from best bets")
         print(f"\nSelecting top 5 best bets from {len(games_not_started)} games that haven't started (odds -125 or better)...")
     
-    best_bets = selector.select_best_bets(all_bets)
+    best_bets = selector.select_best_bets(bets_for_selection)
     print_best_bets(best_bets)
     
     # Save all picks to database (if enabled)
@@ -614,6 +618,11 @@ Examples:
         # Save to database
         result = picks_db.save_picks_batch(db_picks)
         print(f"   ✅ Saved: {result['saved']}, Skipped (locked): {result['skipped']}, Errors: {result['errors']}")
+        
+        # Lock any games that have already started
+        print(f"\n🔒 Locking picks for games that have started...")
+        locked = picks_db.lock_started_games()
+        print(f"   ✅ Locked {locked} picks")
         
         # Mark best bets in database
         if best_bets:
