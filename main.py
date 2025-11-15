@@ -528,6 +528,7 @@ Examples:
                     bet['home_projected'] = home_projected
                     bet['away_projected'] = away_projected
                     bet['start_time'] = time_str
+                    bet['start_time_sort'] = game_time_est  # datetime for database
                 
                 all_bets.extend(spread_bets)
                 all_bets.extend(total_bets)
@@ -573,16 +574,21 @@ Examples:
             home_team = parts[1]
             
             # Create database record
+            # Convert game_start_time to ISO format if it's a datetime object
+            game_start = bet.get('start_time_sort')
+            if game_start and hasattr(game_start, 'isoformat'):
+                game_start = game_start.isoformat()
+            
             db_pick = {
                 'date': today,
                 'game_id': bet.get('game_id', ''),
                 'home_team': home_team,
                 'away_team': away_team,
-                'game_start_time': bet.get('start_time_sort', None),  # datetime object
+                'game_start_time': game_start,
                 'bet_type': bet['bet_type'].lower(),
                 'pick': bet['pick'],
                 'odds': bet['odds'],
-                'predicted_value': bet.get('predicted_value', 0),  # Will need to add this
+                'predicted_value': bet.get('predicted_value', 0),
                 'predicted_prob': bet['predicted_prob'],
                 'confidence': bet['confidence'],
                 'score': bet.get('score', 0),
