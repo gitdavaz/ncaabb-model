@@ -218,6 +218,7 @@ class BestBetsSelector:
                 'bet_type': 'Spread',
                 'pick': f"{pick_team} {pick_spread:+.1f}",
                 'odds': pick_odds,
+                'predicted_value': prediction,  # Predicted spread
                 'predicted_prob': win_prob,
                 'confidence': adjusted_confidence,
                 'reasoning': reasoning
@@ -256,6 +257,7 @@ class BestBetsSelector:
                 'bet_type': 'Total',
                 'pick': pick,
                 'odds': pick_odds,
+                'predicted_value': prediction,  # Predicted total
                 'predicted_prob': win_prob,
                 'confidence': adjusted_confidence,
                 'reasoning': reasoning

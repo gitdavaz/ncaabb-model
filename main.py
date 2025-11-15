@@ -14,6 +14,7 @@ from tabulate import tabulate
 from api_client import CollegeBasketballAPI
 from model import BasketballPredictionModel
 from best_bets import BestBetsSelector
+from model_picks_db import ModelPicksDB
 
 
 def get_confidence_emoji(confidence: float) -> str:
@@ -269,8 +270,9 @@ Examples:
         print("   Some features may not work without authentication.")
         print("   Create a .env file with your API key: API_KEY=your_key_here\n")
     
-    # Initialize caching (if enabled)
+    # Initialize caching and picks database (if enabled)
     cache = None
+    picks_db = None
     use_cache = os.getenv('USE_CACHE', 'true').lower() == 'true'
     if use_cache:
         supabase_url = os.getenv('SUPABASE_URL')
@@ -280,7 +282,9 @@ Examples:
             try:
                 from database import SupabaseCache
                 cache = SupabaseCache(supabase_url, supabase_key)
+                picks_db = ModelPicksDB(supabase_url, supabase_key)
                 print("✅ Cache enabled (Supabase)")
+                print("✅ Picks database enabled (Supabase)")
             except Exception as e:
                 print(f"⚠️  Cache initialization failed: {e}")
                 print("   Continuing without cache...")
@@ -551,6 +555,53 @@ Examples:
     
     best_bets = selector.select_best_bets(all_bets)
     print_best_bets(best_bets)
+    
+    # Save all picks to database (if enabled)
+    if picks_db and all_bets:
+        print(f"\n💾 Saving {len(all_bets)} picks to database...")
+        
+        # Convert bets to database format
+        db_picks = []
+        for bet in all_bets:
+            # Get game info from the bet
+            game_desc = bet.get('game_description', '')
+            parts = game_desc.split(' @ ')
+            if len(parts) != 2:
+                continue
+            
+            away_team = parts[0]
+            home_team = parts[1]
+            
+            # Create database record
+            db_pick = {
+                'date': today,
+                'game_id': bet.get('game_id', ''),
+                'home_team': home_team,
+                'away_team': away_team,
+                'game_start_time': bet.get('start_time_sort', None),  # datetime object
+                'bet_type': bet['bet_type'].lower(),
+                'pick': bet['pick'],
+                'odds': bet['odds'],
+                'predicted_value': bet.get('predicted_value', 0),  # Will need to add this
+                'predicted_prob': bet['predicted_prob'],
+                'confidence': bet['confidence'],
+                'score': bet.get('score', 0),
+                'home_projected': bet.get('home_projected'),
+                'away_projected': bet.get('away_projected'),
+                'reasoning': bet.get('reasoning', ''),
+                'is_locked': False
+            }
+            db_picks.append(db_pick)
+        
+        # Save to database
+        result = picks_db.save_picks_batch(db_picks)
+        print(f"   ✅ Saved: {result['saved']}, Skipped (locked): {result['skipped']}, Errors: {result['errors']}")
+        
+        # Mark best bets in database
+        if best_bets:
+            print(f"\n💾 Marking {len(best_bets)} best bets...")
+            updated = picks_db.mark_best_bets(today, best_bets)
+            print(f"   ✅ Marked {updated} picks as best bets")
     
     # Print API call statistics
     if cache:
