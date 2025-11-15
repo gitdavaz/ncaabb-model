@@ -150,6 +150,25 @@ class CollegeBasketballAPI:
                 
                 game_dict = self._game_to_dict(game)
                 
+                # CRITICAL: Filter by EST date to ensure we only get games from the requested day
+                # API may return games from adjacent days due to UTC boundary issues
+                if hasattr(game, 'start_date') and game.start_date:
+                    try:
+                        game_utc = game.start_date
+                        if isinstance(game_utc, str):
+                            game_utc = datetime.fromisoformat(game_utc.replace('Z', '+00:00'))
+                        # Convert to EST
+                        game_est = game_utc - timedelta(hours=5)
+                        game_est_date = game_est.strftime('%Y-%m-%d')
+                        
+                        # Skip if game is not on the requested EST date
+                        if game_est_date != date:
+                            continue
+                    except Exception as e:
+                        # If we can't parse the date, skip this game
+                        print(f"Warning: Could not parse date for game, skipping: {e}")
+                        continue
+                
                 # Filter for D1 games only if requested
                 if d1_only:
                     # Only include if both teams have a conference affiliation
