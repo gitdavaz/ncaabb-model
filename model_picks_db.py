@@ -94,22 +94,20 @@ class ModelPicksDB:
     
     def mark_best_bets(self, date: str, best_bets: List[Dict]) -> int:
         """
-        Mark picks as best bets
+        Mark picks as best bets (additive - never removes the flag once set)
+        
+        This marks picks that qualify as best bets at ANY point in time.
+        Once marked, a pick stays marked even if it falls out of top 5 later.
+        The best_bet_rank reflects the most recent ranking.
         
         Args:
             date: Date in YYYY-MM-DD format
             best_bets: List of best bet dictionaries
             
         Returns:
-            Number of picks updated
+            Number of picks newly marked or updated
         """
-        # First, clear all best bet flags for this date
-        self.client.table('model_picks').update({
-            'is_best_bet': False,
-            'best_bet_rank': None
-        }).eq('date', date).execute()
-        
-        # Then mark the best bets
+        # Mark the best bets (additive - don't clear previous flags)
         updated = 0
         for i, bet in enumerate(best_bets, 1):
             result = self.client.table('model_picks').update({
