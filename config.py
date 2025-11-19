@@ -32,6 +32,13 @@ MIN_CONFIDENCE_FOR_BEST_BETS = 0.30  # Minimum confidence (0-1) to consider for 
 #       edge opportunity vs data reliability. Let it work!
 #       We filter by VALUE RATING (predicted win prob) not just confidence
 
+# Early Season Total Bet Filtering (Option B from Nov 18 analysis)
+# Analysis showed: Spread bets 53.7% win rate (profitable), Total bets 42.6% (unprofitable)
+# Best Bets went 10-2 (83.3%), proving the scoring algorithm filters out bad totals
+# Solution: Only recommend total bets with HIGH scores during early season
+EARLY_SEASON_TOTAL_MIN_SCORE = 0.50  # Skip total bets below this score in Nov/early Dec
+EARLY_SEASON_END_DATE = (12, 15)  # (month, day) - Filter until Dec 15
+
 # Display Settings
 SHOW_DETAILED_ANALYSIS = True    # Show detailed reasoning for best bets
 USE_COLORED_OUTPUT = False       # Use colored terminal output (requires termcolor)

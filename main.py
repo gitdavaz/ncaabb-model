@@ -531,6 +531,28 @@ Examples:
                 bet['start_time_utc'] = game.get('start_date')  # Original UTC for database
                 bet['game_has_started'] = game_has_started  # Track status
             
+            # Apply early-season total bet filter (Option B: Only recommend high-scoring totals)
+            # Spread bets have proven reliable (53.7% win rate), but total bets struggle (42.6%)
+            # Best bets went 10-2, proving the scoring algorithm works - trust it!
+            game_date = game_time_est.date() if hasattr(game_time_est, 'date') else game_time_est
+            is_early_season = (
+                game_date.month < config.EARLY_SEASON_END_DATE[0] or
+                (game_date.month == config.EARLY_SEASON_END_DATE[0] and 
+                 game_date.day <= config.EARLY_SEASON_END_DATE[1])
+            )
+            
+            for bet in total_bets:
+                # Mark total bets as not recommended if below threshold during early season
+                if is_early_season and bet.get('score', 0) < config.EARLY_SEASON_TOTAL_MIN_SCORE:
+                    bet['recommended'] = False
+                    bet['skip_reason'] = 'Early season: Total bet score below threshold (0.50)'
+                else:
+                    bet['recommended'] = True
+            
+            # All spread bets are recommended
+            for bet in spread_bets:
+                bet['recommended'] = True
+            
             # Always add to all_bets for database saving
             all_bets.extend(spread_bets)
             all_bets.extend(total_bets)
@@ -542,19 +564,31 @@ Examples:
     # Print all game predictions
     print_game_predictions(all_predictions)
     
+    # Print early-season total bet filter summary
+    not_recommended_totals = [bet for bet in all_bets if not bet.get('recommended', True) and bet['bet_type'] == 'total']
+    if not_recommended_totals:
+        print(f"\n⚠️  Early Season Filter Active (until Dec 15):")
+        print(f"   {len(not_recommended_totals)} total bet(s) filtered out (score < 0.50)")
+        print(f"   Spread bets: All recommended ✅")
+        print(f"   Total bets: Only high-confidence picks recommended")
+        print(f"   Reason: Total bets are risky early season (42.6% win rate vs 53.7% for spreads)")
+    
     # Select and print best bets
     games_started = len(games) - len(games_not_started)
     
     # Filter bets for best bets selection based on --all-games flag
+    # Also filter out non-recommended bets (early-season low-scoring totals)
     if args.all_games:
-        # When using --all-games, include all games for best bets
-        bets_for_selection = all_bets
+        # When using --all-games, include all games for best bets (but only recommended bets)
+        bets_for_selection = [bet for bet in all_bets if bet.get('recommended', True)]
         print(f"\nSelecting top 5 best bets from {len(games)} game(s) (odds -125 or better)...")
         if games_started > 0:
             print(f"   ℹ️  Note: {games_started} game(s) have already completed")
     else:
-        # Normal mode: only include bets for games that haven't started
-        bets_for_selection = [bet for bet in all_bets if not bet.get('game_has_started', False)]
+        # Normal mode: only include bets for games that haven't started AND are recommended
+        bets_for_selection = [bet for bet in all_bets 
+                             if not bet.get('game_has_started', False) 
+                             and bet.get('recommended', True)]
         if games_started > 0:
             print(f"\n⏰ Note: {games_started} game(s) have already started and excluded from best bets")
         print(f"\nSelecting top 5 best bets from {len(games_not_started)} games that haven't started (odds -125 or better)...")
@@ -563,8 +597,10 @@ Examples:
     print_best_bets(best_bets)
     
     # Save all picks to database (if enabled)
+    # NOTE: We save ALL bets including non-recommended ones for complete tracking/analysis
     if picks_db and all_bets:
-        print(f"\n💾 Saving {len(all_bets)} picks to database...")
+        recommended_count = len([b for b in all_bets if b.get('recommended', True)])
+        print(f"\n💾 Saving {len(all_bets)} picks to database ({recommended_count} recommended)...")
         
         # Convert bets to database format
         db_picks = []
