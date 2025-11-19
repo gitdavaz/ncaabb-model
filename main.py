@@ -15,6 +15,7 @@ from api_client import CollegeBasketballAPI
 from model import BasketballPredictionModel
 from best_bets import BestBetsSelector
 from model_picks_db import ModelPicksDB
+import config
 
 
 def get_confidence_emoji(confidence: float) -> str:
