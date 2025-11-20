@@ -158,14 +158,16 @@ class BasketballPredictionModel:
         
         # Base regression curve (smooth progression, not hard breakpoints)
         # This creates a natural learning curve as season progresses
+        # NOTE: Reduced trust for early season after Nov 19 analysis (massive prediction errors)
+        # Model was predicting 20-40 point wins that didn't happen - need MORE regression
         if avg_games <= 5:
-            base_weight = 0.75 + (avg_games / 5) * 0.10  # 75% -> 85%
+            base_weight = 0.60 + (avg_games / 5) * 0.15  # 60% -> 75% (was 75% -> 85%)
         elif avg_games <= 10:
-            base_weight = 0.85 + ((avg_games - 5) / 5) * 0.07  # 85% -> 92%
+            base_weight = 0.75 + ((avg_games - 5) / 5) * 0.10  # 75% -> 85% (was 85% -> 92%)
         elif avg_games <= 20:
-            base_weight = 0.92 + ((avg_games - 10) / 10) * 0.05  # 92% -> 97%
+            base_weight = 0.85 + ((avg_games - 10) / 10) * 0.07  # 85% -> 92% (was 92% -> 97%)
         else:
-            base_weight = 0.97 + min((avg_games - 20) / 20, 1.0) * 0.02  # 97% -> 99%
+            base_weight = 0.92 + min((avg_games - 20) / 20, 1.0) * 0.05  # 92% -> 97% (was 97% -> 99%)
         
         # Talent gap adjustment: Trust ratings more for obvious mismatches
         home_metrics = self.calculate_team_metrics(home_stats)
@@ -181,15 +183,21 @@ class BasketballPredictionModel:
         # This catches cases where one side shows the mismatch clearly
         max_gap = max(net_rating_gap, off_rating_gap * 0.7, def_rating_gap * 0.7)
         
-        # Bigger gaps = less regression needed (even early season)
+        # Bigger gaps = less regression needed (but capped for early season)
+        # NOTE: Reduced boosts after Nov 19 - model was too confident early season
         if max_gap > 30:
-            talent_boost = 0.10  # Huge gap (elite vs bottom tier)
+            talent_boost = 0.08  # Huge gap (elite vs bottom tier) - was 0.10
         elif max_gap > 20:
-            talent_boost = 0.07  # Big gap (Power 5 vs mid-major)
+            talent_boost = 0.05  # Big gap (Power 5 vs mid-major) - was 0.07
         elif max_gap > 15:
-            talent_boost = 0.04  # Moderate gap
+            talent_boost = 0.03  # Moderate gap - was 0.04
         else:
             talent_boost = 0.00  # Similar teams - use base regression
+        
+        # Scale down talent boost for very early season (games < 8)
+        # Ratings are too unstable to trust even with big gaps
+        if avg_games < 8:
+            talent_boost *= (avg_games / 8)  # Linear scale: 0% at 0 games, 100% at 8 games
         
         # Early season safety: if net rating gap is small BUT teams have very different
         # win/loss records, add extra boost (catches cases where ratings haven't stabilized)
@@ -223,12 +231,13 @@ class BasketballPredictionModel:
             
             # Apply boost based on conference tier mismatch
             # Larger tier gap = more trust in the better conference team
+            # NOTE: Reduced boosts after Nov 19 - was too aggressive early season
             if tier_gap >= 3:  # e.g., Big Ten (1) vs MAC (4) or worse
-                conference_boost = 0.12  # Trust ratings 12% more
+                conference_boost = 0.08  # Trust ratings 8% more (was 12%)
             elif tier_gap >= 2:  # e.g., Big Ten (1) vs Mountain West (3)
-                conference_boost = 0.08  # Trust ratings 8% more
+                conference_boost = 0.06  # Trust ratings 6% more (was 8%)
             elif tier_gap >= 1:  # e.g., Big Ten (1) vs Big East (2)
-                conference_boost = 0.04  # Trust ratings 4% more
+                conference_boost = 0.03  # Trust ratings 3% more (was 4%)
             
             # Scale down conference boost as season progresses (by game 10, no boost)
             conference_boost *= (10 - avg_games) / 10
@@ -237,7 +246,17 @@ class BasketballPredictionModel:
             talent_boost = max(talent_boost, conference_boost)
         
         # Final weight (capped at 99% to always maintain some regression)
-        final_weight = min(0.99, base_weight + talent_boost)
+        final_weight = base_weight + talent_boost
+        
+        # Additional cap for early season to prevent overconfidence
+        # Nov 19 analysis: Model missed by 20-40 points when trusting early data too much
+        if avg_games < 8:
+            final_weight = min(final_weight, 0.80)  # Max 80% trust in first 8 games
+        elif avg_games < 12:
+            final_weight = min(final_weight, 0.88)  # Max 88% trust in games 8-12
+        
+        # Always cap at 97% to maintain some regression
+        final_weight = min(0.97, final_weight)
         
         return final_weight
     
