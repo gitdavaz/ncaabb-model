@@ -67,12 +67,16 @@ class BestBetsSelector:
             Bet score (higher is better)
         """
         # Balance between bets likely to win AND bets we're confident in
-        # 60% weight on win probability, 40% weight on model confidence
-        
-        # This ensures we're betting on the model's strongest convictions
-        # while still considering the likelihood of cashing
-        base_score = predicted_prob * 0.6
-        confidence_score = confidence * 0.4
+        # 70% weight on win probability, 30% weight on model confidence
+        # NOTE: Changed from 60/40 after Nov 19-20 analysis showed HIGH confidence = LOSSES
+        #       - Hawaii 62% conf → LOST (18 pt miss)
+        #       - Pacific 61% conf → LOST (23 pt miss)
+        #       - Cornell 60% conf → LOST
+        #       Meanwhile LOW conf picks (39-42%) WON consistently
+        #       Confidence measures DATA QUALITY, not PREDICTION ACCURACY early season
+        #       Value (predicted win prob) is more predictive than confidence
+        base_score = predicted_prob * 0.7  # Increased from 0.6
+        confidence_score = confidence * 0.3  # Reduced from 0.4
         
         # Slight penalty for very low odds (they tie up more bankroll)
         # But don't penalize too much since we're looking for likely winners
