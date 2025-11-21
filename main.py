@@ -469,6 +469,10 @@ Examples:
             # Format game time
             time_str = game_time_est.strftime('%I:%M %p') if game_time_est.year != 2099 else "TBD"
             
+            # Initialize value placeholders (will be calculated from bets later)
+            spread_value = 0
+            total_value = 0
+            
             prediction = {
                 'game_id': game_id,
                 'game_description': game_desc,
@@ -530,8 +534,9 @@ Examples:
             )
             
             # Extract value (predicted_prob) from bets for display in ALL GAMES table
-            spread_value = spread_bets[0]['predicted_prob'] if spread_bets else 0
-            total_value = total_bets[0]['predicted_prob'] if total_bets else 0
+            # Update the prediction dict with actual values now that bets are created
+            prediction['spread_value'] = spread_bets[0]['predicted_prob'] if spread_bets else 0
+            prediction['total_value'] = total_bets[0]['predicted_prob'] if total_bets else 0
             
             # Add projected scores and start time to bet dictionaries
             for bet in spread_bets + total_bets:
