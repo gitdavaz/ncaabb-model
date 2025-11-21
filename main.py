@@ -115,9 +115,11 @@ def print_game_predictions(predictions: List[Dict]):
             home_conf = pred['home_conference'][:8]
             conf_info = f"{away_conf} vs {home_conf}"
         
-        # Format confidence as simple percentage (no emojis for better alignment)
+        # Format confidence and value as simple percentage (no emojis for better alignment)
         spread_conf_str = f"{pred['spread_confidence']:.0%}"
         total_conf_str = f"{pred['total_confidence']:.0%}"
+        spread_value_str = f"{pred.get('spread_value', 0):.0%}"
+        total_value_str = f"{pred.get('total_value', 0):.0%}"
         
         # Ensure consistent pick lengths
         spread_pick = pred['spread_pick'][:25]  # Limit length
@@ -134,13 +136,15 @@ def print_game_predictions(predictions: List[Dict]):
             projected_score,
             conf_info,
             spread_pick,
+            spread_value_str,
             spread_conf_str,
             total_pick,
+            total_value_str,
             total_conf_str
         ])
     
     # Print table
-    headers = ['Time (EST)', 'Game', 'Proj Score', 'Matchup', 'Spread Pick', 'Spread Conf', 'Total Pick', 'Total Conf']
+    headers = ['Time (EST)', 'Game', 'Proj Score', 'Matchup', 'Spread Pick', 'S Val', 'S Conf', 'Total Pick', 'T Val', 'T Conf']
     print(tabulate(table_data, headers=headers, tablefmt='grid'))
     
     # Print legend
@@ -480,10 +484,12 @@ Examples:
                 'predicted_spread': predicted_spread,
                 'spread_pick': spread_pick,
                 'spread_odds': spread_odds,
+                'spread_value': spread_value,
                 'spread_confidence': spread_confidence,
                 'spread_reasoning': f"Model predicts {abs(predicted_spread):.1f} pt margin",
                 'total_pick': total_pick,
                 'total_odds': total_odds,
+                'total_value': total_value,
                 'total_confidence': total_confidence,
                 'total_reasoning': f"Model predicts {predicted_total:.1f} total points"
             }
@@ -522,6 +528,10 @@ Examples:
             total_bets = selector.create_bet_from_prediction(
                 game, 'total', predicted_total, total_confidence, odds_data
             )
+            
+            # Extract value (predicted_prob) from bets for display in ALL GAMES table
+            spread_value = spread_bets[0]['predicted_prob'] if spread_bets else 0
+            total_value = total_bets[0]['predicted_prob'] if total_bets else 0
             
             # Add projected scores and start time to bet dictionaries
             for bet in spread_bets + total_bets:
