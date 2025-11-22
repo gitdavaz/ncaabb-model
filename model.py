@@ -248,15 +248,27 @@ class BasketballPredictionModel:
         # Final weight (capped at 99% to always maintain some regression)
         final_weight = base_weight + talent_boost
         
+        # OPTION B: Exempt extreme mismatches from early season caps
+        # When there's a huge talent gap (e.g., Duke vs low-major), the regression
+        # was making us UNDERESTIMATE blowouts. For these extreme cases, trust the model more.
+        is_extreme_mismatch = max_gap > 40  # Elite vs bottom-tier (e.g., Duke/UCLA vs MEAC/SWAC)
+        
         # Additional cap for early season to prevent overconfidence
         # Nov 19 analysis: Model missed by 20-40 points when trusting early data too much
-        if avg_games < 8:
-            final_weight = min(final_weight, 0.80)  # Max 80% trust in first 8 games
-        elif avg_games < 12:
-            final_weight = min(final_weight, 0.88)  # Max 88% trust in games 8-12
-        
-        # Always cap at 97% to maintain some regression
-        final_weight = min(0.97, final_weight)
+        # BUT: Nov 21 analysis shows this backfires on extreme mismatches (missed by 15-24 pts)
+        if is_extreme_mismatch:
+            # For extreme mismatches, use higher cap even early season
+            # Still regress, but not as aggressively (let model predict bigger blowouts)
+            final_weight = min(0.93, final_weight)  # Higher cap for extreme gaps
+        else:
+            # Normal games: keep existing conservative caps
+            if avg_games < 8:
+                final_weight = min(final_weight, 0.80)  # Max 80% trust in first 8 games
+            elif avg_games < 12:
+                final_weight = min(final_weight, 0.88)  # Max 88% trust in games 8-12
+            
+            # Always cap at 97% to maintain some regression
+            final_weight = min(0.97, final_weight)
         
         return final_weight
     
