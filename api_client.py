@@ -596,10 +596,21 @@ class CollegeBasketballAPI:
             for l in line.lines:
                 # Extract spread
                 if hasattr(l, 'spread') and l.spread is not None:
-                    spread_value = float(l.spread) if is_home else -float(l.spread)
+                    # l.spread is relative to the queried team (team_name)
+                    # If team_name is home, l.spread is the home spread
+                    # If team_name is away, l.spread is the away spread
+                    # We need to convert to home/away spreads correctly
+                    if is_home:
+                        home_spread_value = float(l.spread)
+                        away_spread_value = -float(l.spread)
+                    else:
+                        # Team is away, so l.spread is the away spread
+                        away_spread_value = float(l.spread)
+                        home_spread_value = -float(l.spread)
+                    
                     odds_dict['spread'] = {
-                        'home_spread': float(l.spread) if hasattr(l, 'spread') else 0,
-                        'away_spread': -float(l.spread) if hasattr(l, 'spread') else 0,
+                        'home_spread': home_spread_value,
+                        'away_spread': away_spread_value,
                         'home_odds': -110,  # Default odds
                         'away_odds': -110,
                     }
