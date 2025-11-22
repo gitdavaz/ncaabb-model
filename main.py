@@ -565,9 +565,24 @@ Examples:
                 else:
                     bet['recommended'] = True
             
-            # All spread bets are recommended
+            # Mark spread bets as recommended unless they're large underdog spreads
             for bet in spread_bets:
-                bet['recommended'] = True
+                # Extract the spread value from the pick (e.g., "Team +20.5" -> 20.5)
+                pick = bet.get('pick', '')
+                if '+' in pick:
+                    # Extract spread value for underdog bets
+                    try:
+                        spread_value = float(pick.split('+')[1])
+                        # Filter out large underdog spreads (+20 or more)
+                        if spread_value >= 20.0:
+                            bet['recommended'] = False
+                            bet['skip_reason'] = f'Large underdog spread (+{spread_value:.1f}): High variance/blowout risk'
+                        else:
+                            bet['recommended'] = True
+                    except (ValueError, IndexError):
+                        bet['recommended'] = True  # If parsing fails, keep it
+                else:
+                    bet['recommended'] = True  # Favorite bets are always recommended
             
             # Always add to all_bets for database saving
             all_bets.extend(spread_bets)
@@ -580,14 +595,22 @@ Examples:
     # Print all game predictions
     print_game_predictions(all_predictions)
     
-    # Print early-season total bet filter summary
+    # Print bet filter summary
     not_recommended_totals = [bet for bet in all_bets if not bet.get('recommended', True) and bet['bet_type'] == 'total']
-    if not_recommended_totals:
-        print(f"\n⚠️  Early Season Filter Active (until Dec 15):")
-        print(f"   {len(not_recommended_totals)} total bet(s) filtered out (score < 0.50)")
-        print(f"   Spread bets: All recommended ✅")
-        print(f"   Total bets: Only high-confidence picks recommended")
-        print(f"   Reason: Total bets are risky early season (42.6% win rate vs 53.7% for spreads)")
+    not_recommended_spreads = [bet for bet in all_bets if not bet.get('recommended', True) and bet['bet_type'] == 'spread']
+    
+    if not_recommended_totals or not_recommended_spreads:
+        print(f"\n⚠️  Smart Filters Active:")
+        
+        if not_recommended_spreads:
+            print(f"   🚫 {len(not_recommended_spreads)} large underdog spread(s) filtered out (+20 or more)")
+            print(f"      Reason: High variance/blowout risk (33% win rate on Nov 21)")
+        
+        if not_recommended_totals:
+            print(f"   🚫 {len(not_recommended_totals)} early-season total bet(s) filtered out (score < 0.50)")
+            print(f"      Reason: Total bets risky early season (42.6% win rate vs 53.7% for spreads)")
+        
+        print(f"   ℹ️  Filtered bets still saved to database for tracking")
     
     # Select and print best bets
     games_started = len(games) - len(games_not_started)
