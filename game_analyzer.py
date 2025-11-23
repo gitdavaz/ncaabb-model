@@ -370,8 +370,7 @@ def analyze_game(game: Dict, api_client: CollegeBasketballAPI,
         game_date = datetime.now().strftime('%Y-%m-%d')
     
     odds_data = api_client.get_odds_for_team_date(home_team, game_date)
-    # Treat 0 spreads as missing data (CFBD returns 0 when no lines available)
-    if not odds_data or 'spread' not in odds_data or odds_data.get('spread', {}).get('home_spread') == 0:
+    if not odds_data or 'spread' not in odds_data:
         # Create default odds
         odds_data = {
             'spread': {

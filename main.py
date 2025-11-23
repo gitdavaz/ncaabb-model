@@ -401,12 +401,7 @@ Examples:
             odds_data = api_client.get_odds_for_team_date(home_team, game_date)
             
             # If no odds data, create defaults
-            # Also treat 0 spreads as missing data (CFBD returns 0 when no lines available)
             if not odds_data or 'spread' not in odds_data:
-                odds_data = create_default_odds()
-            elif odds_data.get('spread', {}).get('home_spread') == 0:
-                # CFBD returned spread=0, which means no betting line available
-                # Use defaults instead
                 odds_data = create_default_odds()
             
             # Add odds to game dictionary for market-informed predictions
