@@ -565,11 +565,16 @@ Examples:
                 else:
                     bet['recommended'] = True
             
-            # Mark spread bets as recommended unless they're large underdog spreads
+            # Mark spread bets as recommended unless they're large underdog spreads or have invalid lines
             for bet in spread_bets:
                 # Extract the spread value from the pick (e.g., "Team +20.5" -> 20.5)
                 pick = bet.get('pick', '')
-                if '+' in pick:
+                
+                # Check for zero spreads (invalid CFBD data)
+                if '+0.0' in pick or '-0.0' in pick or '+0 ' in pick or '-0 ' in pick:
+                    bet['recommended'] = False
+                    bet['skip_reason'] = 'Invalid/missing betting line (CFBD returned 0.0)'
+                elif '+' in pick:
                     # Extract spread value for underdog bets
                     try:
                         spread_value = float(pick.split('+')[1])
@@ -599,11 +604,19 @@ Examples:
     not_recommended_totals = [bet for bet in all_bets if not bet.get('recommended', True) and bet['bet_type'] == 'total']
     not_recommended_spreads = [bet for bet in all_bets if not bet.get('recommended', True) and bet['bet_type'] == 'spread']
     
+    # Separate invalid spreads from large underdogs
+    invalid_spreads = [bet for bet in not_recommended_spreads if 'Invalid/missing' in bet.get('skip_reason', '')]
+    large_underdogs = [bet for bet in not_recommended_spreads if 'Large underdog' in bet.get('skip_reason', '')]
+    
     if not_recommended_totals or not_recommended_spreads:
         print(f"\n⚠️  Smart Filters Active:")
         
-        if not_recommended_spreads:
-            print(f"   🚫 {len(not_recommended_spreads)} large underdog spread(s) filtered out (+20 or more)")
+        if invalid_spreads:
+            print(f"   ⚠️  {len(invalid_spreads)} spread bet(s) with invalid lines (CFBD returned 0.0)")
+            print(f"      Check your sportsbook for actual lines on these games")
+        
+        if large_underdogs:
+            print(f"   🚫 {len(large_underdogs)} large underdog spread(s) filtered out (+20 or more)")
             print(f"      Reason: High variance/blowout risk (33% win rate on Nov 21)")
         
         if not_recommended_totals:
