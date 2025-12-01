@@ -14,6 +14,8 @@ from tabulate import tabulate
 from api_client import CollegeBasketballAPI
 from model import BasketballPredictionModel
 from best_bets import BestBetsSelector
+from model_picks_db import ModelPicksDB
+import config
 
 
 def get_confidence_emoji(confidence: float) -> str:
@@ -113,9 +115,11 @@ def print_game_predictions(predictions: List[Dict]):
             home_conf = pred['home_conference'][:8]
             conf_info = f"{away_conf} vs {home_conf}"
         
-        # Format confidence as simple percentage (no emojis for better alignment)
+        # Format confidence and value as simple percentage (no emojis for better alignment)
         spread_conf_str = f"{pred['spread_confidence']:.0%}"
         total_conf_str = f"{pred['total_confidence']:.0%}"
+        spread_value_str = f"{pred.get('spread_value', 0):.0%}"
+        total_value_str = f"{pred.get('total_value', 0):.0%}"
         
         # Ensure consistent pick lengths
         spread_pick = pred['spread_pick'][:25]  # Limit length
@@ -132,13 +136,15 @@ def print_game_predictions(predictions: List[Dict]):
             projected_score,
             conf_info,
             spread_pick,
+            spread_value_str,
             spread_conf_str,
             total_pick,
+            total_value_str,
             total_conf_str
         ])
     
     # Print table
-    headers = ['Time (EST)', 'Game', 'Proj Score', 'Matchup', 'Spread Pick', 'Spread Conf', 'Total Pick', 'Total Conf']
+    headers = ['Time (EST)', 'Game', 'Proj Score', 'Matchup', 'Spread Pick', 'S Val', 'S Conf', 'Total Pick', 'T Val', 'T Conf']
     print(tabulate(table_data, headers=headers, tablefmt='grid'))
     
     # Print legend
@@ -269,8 +275,9 @@ Examples:
         print("   Some features may not work without authentication.")
         print("   Create a .env file with your API key: API_KEY=your_key_here\n")
     
-    # Initialize caching (if enabled)
+    # Initialize caching and picks database (if enabled)
     cache = None
+    picks_db = None
     use_cache = os.getenv('USE_CACHE', 'true').lower() == 'true'
     if use_cache:
         supabase_url = os.getenv('SUPABASE_URL')
@@ -280,7 +287,9 @@ Examples:
             try:
                 from database import SupabaseCache
                 cache = SupabaseCache(supabase_url, supabase_key)
+                picks_db = ModelPicksDB(supabase_url, supabase_key)
                 print("✅ Cache enabled (Supabase)")
+                print("✅ Picks database enabled (Supabase)")
             except Exception as e:
                 print(f"⚠️  Cache initialization failed: {e}")
                 print("   Continuing without cache...")
@@ -460,6 +469,10 @@ Examples:
             # Format game time
             time_str = game_time_est.strftime('%I:%M %p') if game_time_est.year != 2099 else "TBD"
             
+            # Initialize value placeholders (will be calculated from bets later)
+            spread_value = 0
+            total_value = 0
+            
             prediction = {
                 'game_id': game_id,
                 'game_description': game_desc,
@@ -475,10 +488,12 @@ Examples:
                 'predicted_spread': predicted_spread,
                 'spread_pick': spread_pick,
                 'spread_odds': spread_odds,
+                'spread_value': spread_value,
                 'spread_confidence': spread_confidence,
                 'spread_reasoning': f"Model predicts {abs(predicted_spread):.1f} pt margin",
                 'total_pick': total_pick,
                 'total_odds': total_odds,
+                'total_value': total_value,
                 'total_confidence': total_confidence,
                 'total_reasoning': f"Model predicts {predicted_total:.1f} total points"
             }
@@ -506,27 +521,77 @@ Examples:
                 except:
                     pass
             
-            # Add to best bets if game hasn't started OR if --all-games flag is set
-            if not game_has_started or args.all_games:
-                if not game_has_started:
-                    games_not_started.append(game)
+            # Track games that haven't started
+            if not game_has_started:
+                games_not_started.append(game)
+            
+            # ALWAYS create bets for ALL games (for database tracking)
+            spread_bets = selector.create_bet_from_prediction(
+                game, 'spread', predicted_spread, spread_confidence, odds_data
+            )
+            total_bets = selector.create_bet_from_prediction(
+                game, 'total', predicted_total, total_confidence, odds_data
+            )
+            
+            # Extract value (predicted_prob) from bets for display in ALL GAMES table
+            # Update the prediction dict with actual values now that bets are created
+            prediction['spread_value'] = spread_bets[0]['predicted_prob'] if spread_bets else 0
+            prediction['total_value'] = total_bets[0]['predicted_prob'] if total_bets else 0
+            
+            # Add projected scores and start time to bet dictionaries
+            for bet in spread_bets + total_bets:
+                bet['home_projected'] = home_projected
+                bet['away_projected'] = away_projected
+                bet['start_time'] = time_str  # Formatted string for display (EST)
+                bet['start_time_sort'] = game_time_est  # For sorting (EST)
+                bet['start_time_utc'] = game.get('start_date')  # Original UTC for database
+                bet['game_has_started'] = game_has_started  # Track status
+            
+            # Apply early-season total bet filter (Option B: Only recommend high-scoring totals)
+            # Spread bets have proven reliable (53.7% win rate), but total bets struggle (42.6%)
+            # Best bets went 10-2, proving the scoring algorithm works - trust it!
+            game_date = game_time_est.date() if hasattr(game_time_est, 'date') else game_time_est
+            is_early_season = (
+                game_date.month < config.EARLY_SEASON_END_DATE[0] or
+                (game_date.month == config.EARLY_SEASON_END_DATE[0] and 
+                 game_date.day <= config.EARLY_SEASON_END_DATE[1])
+            )
+            
+            for bet in total_bets:
+                # Mark total bets as not recommended if below threshold during early season
+                if is_early_season and bet.get('score', 0) < config.EARLY_SEASON_TOTAL_MIN_SCORE:
+                    bet['recommended'] = False
+                    bet['skip_reason'] = 'Early season: Total bet score below threshold (0.50)'
+                else:
+                    bet['recommended'] = True
+            
+            # Mark spread bets as recommended unless they're large underdog spreads or have invalid lines
+            for bet in spread_bets:
+                # Extract the spread value from the pick (e.g., "Team +20.5" -> 20.5)
+                pick = bet.get('pick', '')
                 
-                # Create bets for best bets selection
-                spread_bets = selector.create_bet_from_prediction(
-                    game, 'spread', predicted_spread, spread_confidence, odds_data
-                )
-                total_bets = selector.create_bet_from_prediction(
-                    game, 'total', predicted_total, total_confidence, odds_data
-                )
-                
-                # Add projected scores and start time to bet dictionaries
-                for bet in spread_bets + total_bets:
-                    bet['home_projected'] = home_projected
-                    bet['away_projected'] = away_projected
-                    bet['start_time'] = time_str
-                
-                all_bets.extend(spread_bets)
-                all_bets.extend(total_bets)
+                # Check for zero spreads (invalid CFBD data)
+                if '+0.0' in pick or '-0.0' in pick or '+0 ' in pick or '-0 ' in pick:
+                    bet['recommended'] = False
+                    bet['skip_reason'] = 'Invalid/missing betting line (CFBD returned 0.0)'
+                elif '+' in pick:
+                    # Extract spread value for underdog bets
+                    try:
+                        spread_value = float(pick.split('+')[1])
+                        # Filter out large underdog spreads (+20 or more)
+                        if spread_value >= 20.0:
+                            bet['recommended'] = False
+                            bet['skip_reason'] = f'Large underdog spread (+{spread_value:.1f}): High variance/blowout risk'
+                        else:
+                            bet['recommended'] = True
+                    except (ValueError, IndexError):
+                        bet['recommended'] = True  # If parsing fails, keep it
+                else:
+                    bet['recommended'] = True  # Favorite bets are always recommended
+            
+            # Always add to all_bets for database saving
+            all_bets.extend(spread_bets)
+            all_bets.extend(total_bets)
             
         except Exception as e:
             print(f"  ⚠️  Error analyzing game: {e}")
@@ -535,22 +600,123 @@ Examples:
     # Print all game predictions
     print_game_predictions(all_predictions)
     
+    # Print bet filter summary
+    not_recommended_totals = [bet for bet in all_bets if not bet.get('recommended', True) and bet['bet_type'] == 'total']
+    not_recommended_spreads = [bet for bet in all_bets if not bet.get('recommended', True) and bet['bet_type'] == 'spread']
+    
+    # Separate invalid spreads from large underdogs
+    invalid_spreads = [bet for bet in not_recommended_spreads if 'Invalid/missing' in bet.get('skip_reason', '')]
+    large_underdogs = [bet for bet in not_recommended_spreads if 'Large underdog' in bet.get('skip_reason', '')]
+    
+    if not_recommended_totals or not_recommended_spreads:
+        print(f"\n⚠️  Smart Filters Active:")
+        
+        if invalid_spreads:
+            print(f"   ⚠️  {len(invalid_spreads)} spread bet(s) with invalid lines (CFBD returned 0.0)")
+            print(f"      Check your sportsbook for actual lines on these games")
+        
+        if large_underdogs:
+            print(f"   🚫 {len(large_underdogs)} large underdog spread(s) filtered out (+20 or more)")
+            print(f"      Reason: High variance/blowout risk (33% win rate on Nov 21)")
+        
+        if not_recommended_totals:
+            print(f"   🚫 {len(not_recommended_totals)} early-season total bet(s) filtered out (score < 0.50)")
+            print(f"      Reason: Total bets risky early season (42.6% win rate vs 53.7% for spreads)")
+        
+        print(f"   ℹ️  Filtered bets still saved to database for tracking")
+    
     # Select and print best bets
     games_started = len(games) - len(games_not_started)
     
+    # Filter bets for best bets selection based on --all-games flag
+    # Also filter out non-recommended bets (early-season low-scoring totals)
     if args.all_games:
-        # When using --all-games, include all games for best bets
+        # When using --all-games, include all games for best bets (but only recommended bets)
+        bets_for_selection = [bet for bet in all_bets if bet.get('recommended', True)]
         print(f"\nSelecting top 5 best bets from {len(games)} game(s) (odds -125 or better)...")
         if games_started > 0:
             print(f"   ℹ️  Note: {games_started} game(s) have already completed")
     else:
-        # Normal mode: only upcoming games
+        # Normal mode: only include bets for games that haven't started AND are recommended
+        bets_for_selection = [bet for bet in all_bets 
+                             if not bet.get('game_has_started', False) 
+                             and bet.get('recommended', True)]
         if games_started > 0:
             print(f"\n⏰ Note: {games_started} game(s) have already started and excluded from best bets")
         print(f"\nSelecting top 5 best bets from {len(games_not_started)} games that haven't started (odds -125 or better)...")
     
-    best_bets = selector.select_best_bets(all_bets)
+    best_bets = selector.select_best_bets(bets_for_selection)
     print_best_bets(best_bets)
+    
+    # Save all picks to database (if enabled)
+    # NOTE: We save ALL bets including non-recommended ones for complete tracking/analysis
+    if picks_db and all_bets:
+        recommended_count = len([b for b in all_bets if b.get('recommended', True)])
+        print(f"\n💾 Saving {len(all_bets)} picks to database ({recommended_count} recommended)...")
+        
+        # Convert bets to database format
+        db_picks = []
+        for bet in all_bets:
+            # Get game info from the bet
+            game_desc = bet.get('game_description', '')
+            parts = game_desc.split(' @ ')
+            if len(parts) != 2:
+                continue
+            
+            away_team = parts[0]
+            home_team = parts[1]
+            
+            # Create database record
+            # Use the original UTC time from the API (not the EST-converted display time)
+            # This ensures the lock mechanism compares correctly with PostgreSQL's NOW()
+            game_start = bet.get('start_time_utc')  # Original UTC timestamp
+            if game_start:
+                # Parse if it's a string
+                if isinstance(game_start, str):
+                    # Remove timezone suffix if present and parse
+                    start_str = game_start.replace('+00:00', '').replace('Z', '')
+                    game_start_dt = datetime.fromisoformat(start_str.split('.')[0])
+                    # Make it timezone-aware (UTC)
+                    game_start_dt = game_start_dt.replace(tzinfo=timezone.utc)
+                    game_start = game_start_dt.isoformat()
+                elif hasattr(game_start, 'isoformat'):
+                    # Already a datetime, just convert to ISO
+                    game_start = game_start.isoformat()
+            
+            db_pick = {
+                'date': today,
+                'game_id': bet.get('game_id', ''),
+                'home_team': home_team,
+                'away_team': away_team,
+                'game_start_time': game_start,
+                'bet_type': bet['bet_type'].lower(),
+                'pick': bet['pick'],
+                'odds': bet['odds'],
+                'predicted_value': bet.get('predicted_value', 0),
+                'predicted_prob': bet['predicted_prob'],
+                'confidence': bet['confidence'],
+                'score': bet.get('score', 0),
+                'home_projected': bet.get('home_projected'),
+                'away_projected': bet.get('away_projected'),
+                'reasoning': bet.get('reasoning', ''),
+                'is_locked': False
+            }
+            db_picks.append(db_pick)
+        
+        # Save to database
+        result = picks_db.save_picks_batch(db_picks)
+        print(f"   ✅ Saved: {result['saved']}, Skipped (locked): {result['skipped']}, Errors: {result['errors']}")
+        
+        # Lock any games that have already started
+        print(f"\n🔒 Locking picks for games that have started...")
+        locked = picks_db.lock_started_games()
+        print(f"   ✅ Locked {locked} picks")
+        
+        # Mark best bets in database
+        if best_bets:
+            print(f"\n💾 Marking {len(best_bets)} best bets...")
+            updated = picks_db.mark_best_bets(today, best_bets)
+            print(f"   ✅ Marked {updated} picks as best bets")
     
     # Print API call statistics
     if cache:

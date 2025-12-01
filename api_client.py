@@ -124,6 +124,30 @@ class CollegeBasketballAPI:
             if self.cache and not upcoming_only:  # Only cache completed games
                 cached_games = self.cache.get_games_by_date(date, season)
                 if cached_games:
+                    # CRITICAL: Apply EST date filter to cached data too
+                    # (cache may have been populated before the timezone fix)
+                    filtered_games = []
+                    for game in cached_games:
+                        try:
+                            start_date = game.get('start_date')
+                            if start_date:
+                                # Parse and convert to EST
+                                if isinstance(start_date, str):
+                                    game_utc = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+                                else:
+                                    game_utc = start_date
+                                game_est = game_utc - timedelta(hours=5)
+                                game_est_date = game_est.strftime('%Y-%m-%d')
+                                
+                                # Only include if game is on the requested EST date
+                                if game_est_date == date:
+                                    filtered_games.append(game)
+                        except Exception:
+                            # If date parsing fails, exclude the game
+                            continue
+                    
+                    cached_games = filtered_games
+                    
                     # Still apply D1 filter if requested
                     if d1_only:
                         cached_games = [g for g in cached_games 
@@ -149,6 +173,25 @@ class CollegeBasketballAPI:
                         continue
                 
                 game_dict = self._game_to_dict(game)
+                
+                # CRITICAL: Filter by EST date to ensure we only get games from the requested day
+                # API may return games from adjacent days due to UTC boundary issues
+                if hasattr(game, 'start_date') and game.start_date:
+                    try:
+                        game_utc = game.start_date
+                        if isinstance(game_utc, str):
+                            game_utc = datetime.fromisoformat(game_utc.replace('Z', '+00:00'))
+                        # Convert to EST
+                        game_est = game_utc - timedelta(hours=5)
+                        game_est_date = game_est.strftime('%Y-%m-%d')
+                        
+                        # Skip if game is not on the requested EST date
+                        if game_est_date != date:
+                            continue
+                    except Exception as e:
+                        # If we can't parse the date, skip this game
+                        print(f"Warning: Could not parse date for game, skipping: {e}")
+                        continue
                 
                 # Filter for D1 games only if requested
                 if d1_only:
@@ -553,10 +596,21 @@ class CollegeBasketballAPI:
             for l in line.lines:
                 # Extract spread
                 if hasattr(l, 'spread') and l.spread is not None:
-                    spread_value = float(l.spread) if is_home else -float(l.spread)
+                    # l.spread is relative to the queried team (team_name)
+                    # If team_name is home, l.spread is the home spread
+                    # If team_name is away, l.spread is the away spread
+                    # We need to convert to home/away spreads correctly
+                    if is_home:
+                        home_spread_value = float(l.spread)
+                        away_spread_value = -float(l.spread)
+                    else:
+                        # Team is away, so l.spread is the away spread
+                        away_spread_value = float(l.spread)
+                        home_spread_value = -float(l.spread)
+                    
                     odds_dict['spread'] = {
-                        'home_spread': float(l.spread) if hasattr(l, 'spread') else 0,
-                        'away_spread': -float(l.spread) if hasattr(l, 'spread') else 0,
+                        'home_spread': home_spread_value,
+                        'away_spread': away_spread_value,
                         'home_odds': -110,  # Default odds
                         'away_odds': -110,
                     }
