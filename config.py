@@ -24,13 +24,10 @@ WEIGHTS = {
 }
 
 # Confidence Thresholds
-MIN_CONFIDENCE_FOR_BEST_BETS = 0.30  # Minimum confidence (0-1) to consider for best bets
-# Note: Low threshold because confidence measures DATA QUALITY, not PREDICTION QUALITY
-#       Analysis (Nov 12-14) showed: 30-35% conf = 88% win rate, 40-50% conf = 50% win rate
-#       This is because early season (low conf) = MORE market inefficiency = BIGGER EDGES
-#       The best_bets scoring algorithm (60% value, 40% confidence) naturally balances
-#       edge opportunity vs data reliability. Let it work!
-#       We filter by VALUE RATING (predicted win prob) not just confidence
+MIN_CONFIDENCE_FOR_BEST_BETS = 0.40  # Minimum confidence (0-1) to consider for best bets
+# Dec 2025 Update: Raised from 0.30 to 0.40 after analysis of Dec 3-7 losses
+# Multiple 33% confidence picks lost on Dec 7: Weber State +8.5, TCU +9.5, etc.
+# Early season low-conf picks are no longer outperforming - season data is more stable now
 
 # Early Season Total Bet Filtering (Option B from Nov 18 analysis)
 # Analysis showed: Spread bets 53.7% win rate (profitable), Total bets 42.6% (unprofitable)

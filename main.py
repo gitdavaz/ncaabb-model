@@ -565,7 +565,8 @@ Examples:
                 else:
                     bet['recommended'] = True
             
-            # Mark spread bets as recommended unless they're large underdog spreads or have invalid lines
+            # Mark spread bets as recommended unless they're large spreads or have invalid lines
+            # Dec 2025 analysis: Large spreads (both favorites AND underdogs) have high variance
             for bet in spread_bets:
                 # Extract the spread value from the pick (e.g., "Team +20.5" -> 20.5)
                 pick = bet.get('pick', '')
@@ -578,16 +579,35 @@ Examples:
                     # Extract spread value for underdog bets
                     try:
                         spread_value = float(pick.split('+')[1])
-                        # Filter out large underdog spreads (+20 or more)
-                        if spread_value >= 20.0:
+                        # Filter out large underdog spreads (+15 or more)
+                        # Dec 2025: Lowered from +20 to +15 after best bets with +10-20 underperformed
+                        if spread_value >= 15.0:
                             bet['recommended'] = False
                             bet['skip_reason'] = f'Large underdog spread (+{spread_value:.1f}): High variance/blowout risk'
                         else:
                             bet['recommended'] = True
                     except (ValueError, IndexError):
                         bet['recommended'] = True  # If parsing fails, keep it
+                elif '-' in pick:
+                    # Extract spread value for favorite bets
+                    # Dec 2025: Added filter for large favorites (e.g., -28.5) after High Point -28.5 loss
+                    try:
+                        # Parse spread like "Team -20.5" -> 20.5
+                        parts = pick.split('-')
+                        if len(parts) >= 2:
+                            spread_value = float(parts[-1].split()[0])
+                            # Filter out large favorite spreads (-15 or more)
+                            if spread_value >= 15.0:
+                                bet['recommended'] = False
+                                bet['skip_reason'] = f'Large favorite spread (-{spread_value:.1f}): High variance/blowout risk'
+                            else:
+                                bet['recommended'] = True
+                        else:
+                            bet['recommended'] = True
+                    except (ValueError, IndexError):
+                        bet['recommended'] = True  # If parsing fails, keep it
                 else:
-                    bet['recommended'] = True  # Favorite bets are always recommended
+                    bet['recommended'] = True  # Other bets are recommended
             
             # Always add to all_bets for database saving
             all_bets.extend(spread_bets)
@@ -604,9 +624,10 @@ Examples:
     not_recommended_totals = [bet for bet in all_bets if not bet.get('recommended', True) and bet['bet_type'] == 'total']
     not_recommended_spreads = [bet for bet in all_bets if not bet.get('recommended', True) and bet['bet_type'] == 'spread']
     
-    # Separate invalid spreads from large underdogs
+    # Separate invalid spreads from large spreads
     invalid_spreads = [bet for bet in not_recommended_spreads if 'Invalid/missing' in bet.get('skip_reason', '')]
     large_underdogs = [bet for bet in not_recommended_spreads if 'Large underdog' in bet.get('skip_reason', '')]
+    large_favorites = [bet for bet in not_recommended_spreads if 'Large favorite' in bet.get('skip_reason', '')]
     
     if not_recommended_totals or not_recommended_spreads:
         print(f"\n⚠️  Smart Filters Active:")
@@ -616,8 +637,12 @@ Examples:
             print(f"      Check your sportsbook for actual lines on these games")
         
         if large_underdogs:
-            print(f"   🚫 {len(large_underdogs)} large underdog spread(s) filtered out (+20 or more)")
-            print(f"      Reason: High variance/blowout risk (33% win rate on Nov 21)")
+            print(f"   🚫 {len(large_underdogs)} large underdog spread(s) filtered out (+15 or more)")
+            print(f"      Reason: High variance/blowout risk")
+        
+        if large_favorites:
+            print(f"   🚫 {len(large_favorites)} large favorite spread(s) filtered out (-15 or more)")
+            print(f"      Reason: High variance/blowout risk (High Point -28.5 loss on Dec 5)")
         
         if not_recommended_totals:
             print(f"   🚫 {len(not_recommended_totals)} early-season total bet(s) filtered out (score < 0.50)")
