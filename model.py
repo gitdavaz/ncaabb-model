@@ -553,6 +553,14 @@ class BasketballPredictionModel:
                         else:
                             predicted_spread -= adjustment  # More negative (away favored more)
         
+        # Dec 2025: LINE SHADING ADJUSTMENT
+        # Analysis of Dec 9-14 showed favorites losing 42.3% vs underdogs 51.5%
+        # The model systematically overestimates how much favorites will win by
+        # Solution: Shade predictions 1.5 points toward away team (underdog)
+        # This makes model less likely to pick favorites, improving accuracy
+        UNDERDOG_SHADE = 1.5
+        predicted_spread -= UNDERDOG_SHADE  # Negative = more favorable to away/underdog
+        
         # Sanity bounds (but much more generous than before)
         predicted_spread = max(-50, min(50, predicted_spread))
         
