@@ -67,16 +67,14 @@ class BestBetsSelector:
             Bet score (higher is better)
         """
         # Balance between bets likely to win AND bets we're confident in
-        # 70% weight on win probability, 30% weight on model confidence
-        # NOTE: Changed from 60/40 after Nov 19-20 analysis showed HIGH confidence = LOSSES
-        #       - Hawaii 62% conf → LOST (18 pt miss)
-        #       - Pacific 61% conf → LOST (23 pt miss)
-        #       - Cornell 60% conf → LOST
-        #       Meanwhile LOW conf picks (39-42%) WON consistently
-        #       Confidence measures DATA QUALITY, not PREDICTION ACCURACY early season
-        #       Value (predicted win prob) is more predictive than confidence
-        base_score = predicted_prob * 0.7  # Increased from 0.6
-        confidence_score = confidence * 0.3  # Reduced from 0.4
+        # 80% weight on win probability, 20% weight on model confidence
+        # Dec 2025 Update: Changed from 70/30 to 80/20
+        #   - Analysis of Dec 1-14 showed low value (53-56%) picks losing despite high confidence
+        #   - Winning picks had value 56%+ consistently
+        #   - Season data is more stable now, value is more predictive than confidence
+        #   - Market efficiency increasing = need bigger edges (higher value)
+        base_score = predicted_prob * 0.8  # Increased from 0.7
+        confidence_score = confidence * 0.2  # Reduced from 0.3
         
         # Slight penalty for very low odds (they tie up more bankroll)
         # But don't penalize too much since we're looking for likely winners
@@ -124,12 +122,16 @@ class BestBetsSelector:
         Returns:
             List of top 5 best bets, sorted by score
         """
-        # Filter by odds criteria AND minimum confidence
+        # Filter by odds criteria AND minimum confidence AND minimum value
         min_confidence = config.MIN_CONFIDENCE_FOR_BEST_BETS
+        min_value = config.MIN_VALUE_FOR_BEST_BETS
+        min_score = config.MIN_SCORE_FOR_BEST_BETS
+        
         eligible_bets = [
             bet for bet in all_bets 
             if self.meets_odds_criteria(bet['odds']) 
             and bet['confidence'] >= min_confidence
+            and bet['predicted_prob'] >= min_value  # Dec 2025: Added min value filter
         ]
         
         # Calculate scores for each bet
@@ -139,6 +141,9 @@ class BestBetsSelector:
                 bet['odds'],
                 bet['confidence']
             )
+        
+        # Filter by minimum score (Dec 2025: Added to eliminate low-edge bets)
+        eligible_bets = [bet for bet in eligible_bets if bet['score'] >= min_score]
         
         # Sort by score (highest first)
         sorted_bets = sorted(eligible_bets, key=lambda x: x['score'], reverse=True)

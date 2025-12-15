@@ -23,11 +23,15 @@ WEIGHTS = {
     'defensive_rating': -0.5,    # Multiplier for defensive rating difference
 }
 
-# Confidence Thresholds
+# Best Bet Selection Thresholds (Dec 2025 Update)
+# Analysis of Dec 1-14 (35-35, 50%) showed low value picks losing despite high confidence
 MIN_CONFIDENCE_FOR_BEST_BETS = 0.40  # Minimum confidence (0-1) to consider for best bets
-# Dec 2025 Update: Raised from 0.30 to 0.40 after analysis of Dec 3-7 losses
-# Multiple 33% confidence picks lost on Dec 7: Weber State +8.5, TCU +9.5, etc.
-# Early season low-conf picks are no longer outperforming - season data is more stable now
+MIN_VALUE_FOR_BEST_BETS = 0.58       # Minimum value/predicted probability (0-1)
+MIN_SCORE_FOR_BEST_BETS = 0.55       # Minimum combined score to be eligible
+# Rationale:
+#   - Low value (53-56%) picks were losing consistently (Dec 12, 14)
+#   - Winning picks typically had value 56%+ and score 0.55+
+#   - Market is more efficient mid-season, need bigger edges to profit
 
 # Early Season Total Bet Filtering (Option B from Nov 18 analysis)
 # Analysis showed: Spread bets 53.7% win rate (profitable), Total bets 42.6% (unprofitable)
