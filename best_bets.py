@@ -127,9 +127,13 @@ class BestBetsSelector:
         min_value = config.MIN_VALUE_FOR_BEST_BETS
         min_score = config.MIN_SCORE_FOR_BEST_BETS
         
+        # Dec 2025: Only include spread bets in best bets selection
+        # Total bets have been consistently underperforming and dilute pick quality
         eligible_bets = [
             bet for bet in all_bets 
-            if self.meets_odds_criteria(bet['odds']) 
+            if bet.get('bet_type', '').lower() == 'spread'  # Spreads only
+            and bet.get('recommended', True)  # Must be recommended (not filtered)
+            and self.meets_odds_criteria(bet['odds']) 
             and bet['confidence'] >= min_confidence
             and bet['predicted_prob'] >= min_value  # Dec 2025: Added min value filter
         ]
